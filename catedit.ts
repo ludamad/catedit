@@ -10,7 +10,7 @@ var args = process.argv.map(s => s); args.shift(); args.shift(); // Pop front tw
 
 temp.mkdir('catedit', (err,dirPath) => {
     if (err) throw err;
-    combineInputIntoTemporaryFile(dirPath);
+    synthesizeInputRunEditorParseOutput(dirPath);
 })
 
 // Helper functions from here out
@@ -37,44 +37,60 @@ function computeNewContents(fileContent) {
     return newContents;
 }
 
-function combineInputIntoTemporaryFile(tempDirPath) {
-    let contentList:string[] = args.map(fname => `@@${fname}@@\n${readIfExists(fname)}@@END@@\n`);
+let fileMap = {};
+for (let file of args) {
+    fileMap[file] = readIfExists(file);
+}
+
+function synthesizeInputRunEditorParseOutput(tempDirPath) {
+    let contentList:string[] = args.map(fname => `@@${fname}@@\n${fileMap[fname]}@@END@@\n`);
     // Provides some hint to the files inside:
     let cateditFileName = "catedit_" + args.join('_').replace(/[^a-zA-Z0-9@]/g, '@');
-    if (cateditFileName.length > 25) {
-        cateditFileName = cateditFileName.substring(0, 22) + '...';
+    if (cateditFileName.length > 10) {
+        cateditFileName = cateditFileName.substring(0, 10);
     }
     let filePath = path.join(tempDirPath, cateditFileName);
-    fs.writeFileSync(filePath, contentList.join('\n'));
-    launchVim(filePath)
-}
+    let synthesizedInput = contentList.join('\n');
+    fs.writeFileSync(filePath, synthesizedInput);
 
-function launchVim(filePath) {
-    let vimInstance = spawn('vim', [filePath, '-c', 'silent set filetype=typescript'], { stdio: 'inherit' });
-    function afterVimCloses() {
-        updateFilesAccordingToChanges(filePath);
-    }
-    vimInstance.on('exit', afterVimCloses);
-}
-
-function updateFilesAccordingToChanges(filePath) {
-    let fileContent = fs.readFileSync(filePath, 'utf8');
-    let newContent = computeNewContents(fileContent);
-    let removed = args; //copy
-    for (var key of Object.keys(newContent)) {
-        let existed = fs.existsSync(key);
-        // We delete files no longer mentioned
-        fs.writeFileSync(key, newContent[key]);
-        removed = removed.filter(fname => fname !== key);
-        if (!existed) {
-            console.log(clc.green(`Wrote new file '${key}'.`));
-        } else {
-            console.log(clc.yellow(`Updated '${key}'.`));
+    launchVim(filePath, () => {
+        // Parse output afterwards:
+        let finalOutput = fs.readFileSync(filePath, 'utf8');
+        // Special case: No writes at all.
+        if (synthesizedInput === finalOutput) { 
+            console.log(clc.blackBright(`No changes detected at all.`));
+            return;
         }
-    }
-    deleteRemovedEntries(removed);
+
+        // Write a backup before fiddling with files:
+        fs.writeFileSync(`${filePath}.backup`, synthesizedInput);
+        console.log(clc.blackBright(`Backup written to ${filePath}.backup`))
+        let newContent = computeNewContents(finalOutput);
+        let removed = args; 
+        for (var fileToUpdate of Object.keys(newContent)) {
+            let existed = fs.existsSync(fileToUpdate);
+            removed = removed.filter(fname => fname !== fileToUpdate);
+            if (newContent[fileToUpdate] === fileMap[fileToUpdate]) {
+                console.log(clc.blackBright(`No changes detected in ${fileToUpdate}.`));
+                // Elide the write
+                continue;
+            }
+            fs.writeFileSync(fileToUpdate, newContent[fileToUpdate]);
+            if (!existed) {
+                console.log(clc.green(`Wrote new file '${fileToUpdate}'.`));
+            } else {
+                console.log(clc.yellow(`Updated '${fileToUpdate}'.`));
+            }
+        }
+        // We delete files whose entry blocks were removed:
+        deleteRemovedEntries(removed);
+    });
 }
 
+function launchVim(filePath, afterVimClosesCallback) {
+    let vimInstance = spawn('vim', [filePath, '-c', 'silent set filetype=typescript'], { stdio: 'inherit' });
+    vimInstance.on('exit', afterVimClosesCallback);
+}
 function deleteRemovedEntries(removed) {
     // Remove the removed:
     for (let fileName of removed) {
