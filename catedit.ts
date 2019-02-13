@@ -50,15 +50,23 @@ function synthesizeInputRunEditorParseOutput(tempDirPath) {
         cateditFileName = cateditFileName.substring(0, 10);
     }
     let filePath = path.join(tempDirPath, cateditFileName);
+
+    let extension = "";
+    for (let arg of args) {
+        let parts = arg.split('.');
+        extension = '.' + parts[parts.length - 1];
+        break;
+    }
+    filePath += extension;
+
     let synthesizedInput = contentList.join('\n');
     fs.writeFileSync(filePath, synthesizedInput);
-
     launchVim(filePath, () => {
         // Parse output afterwards:
         let finalOutput = fs.readFileSync(filePath, 'utf8');
         // Special case: No writes at all.
         if (synthesizedInput === finalOutput) { 
-            console.log(clc.blackBright(`No changes detected at all.`));
+            console.log(clc.blackBright(`No changes.`));
             return;
         }
 
@@ -71,15 +79,15 @@ function synthesizeInputRunEditorParseOutput(tempDirPath) {
             let existed = fs.existsSync(fileToUpdate);
             removed = removed.filter(fname => fname !== fileToUpdate);
             if (newContent[fileToUpdate] === fileMap[fileToUpdate]) {
-                console.log(clc.blackBright(`No changes detected in ${fileToUpdate}.`));
+                console.log(clc.blackBright(`No changes in ${fileToUpdate}`));
                 // Elide the write
                 continue;
             }
             fs.writeFileSync(fileToUpdate, newContent[fileToUpdate]);
             if (!existed) {
-                console.log(clc.green(`Wrote new file '${fileToUpdate}'.`));
+                console.log(clc.green(`Wrote new file ${fileToUpdate}`));
             } else {
-                console.log(clc.yellow(`Updated '${fileToUpdate}'.`));
+                console.log(clc.yellow(`Updated ${fileToUpdate}`));
             }
         }
         // We delete files whose entry blocks were removed:
@@ -88,7 +96,7 @@ function synthesizeInputRunEditorParseOutput(tempDirPath) {
 }
 
 function launchVim(filePath, afterVimClosesCallback) {
-    let vimInstance = spawn('vim', [filePath, '-c', 'silent set filetype=typescript'], { stdio: 'inherit' });
+    let vimInstance = spawn('vim', [filePath], { stdio: 'inherit' });
     vimInstance.on('exit', afterVimClosesCallback);
 }
 function deleteRemovedEntries(removed) {
@@ -101,7 +109,11 @@ function deleteRemovedEntries(removed) {
 
 function readIfExists(fname) {
     try {
-        return fs.readFileSync(fname, 'utf8');
+        let fileContents = fs.readFileSync(fname, 'utf8').toString();
+        if (!fileContents.endsWith('\n')) {
+            fileContents += '\n';
+        }
+        return fileContents;
     } catch (err) {
         return '';
     }
