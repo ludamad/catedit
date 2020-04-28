@@ -1,5 +1,6 @@
 declare var require, process;
 
+const mkdirp = require('mkdirp');
 var fs = require('fs');
 var temp = require('temp');
 var path = require('path');
@@ -45,7 +46,7 @@ for (let file of args) {
 function synthesizeInputRunEditorParseOutput(tempDirPath) {
     let contentList:string[] = args.map(fname => `@@${fname}@@\n${fileMap[fname]}@@END@@\n`);
     // Provides some hint to the files inside:
-    let cateditFileName = "catedit_" + args.join('_').replace(/[^a-zA-Z0-9@]/g, '@');
+    let cateditFileName = "catedit_" + args.join('_').replace(/[^a-zA-Z0-9@\/]/g, '@');
     if (cateditFileName.length > 10) {
         cateditFileName = cateditFileName.substring(0, 10);
     }
@@ -61,7 +62,7 @@ function synthesizeInputRunEditorParseOutput(tempDirPath) {
 
     let synthesizedInput = contentList.join('\n');
     fs.writeFileSync(filePath, synthesizedInput);
-    launchVim(filePath, () => {
+    launchVim(filePath, async () => {
         // Parse output afterwards:
         let finalOutput = fs.readFileSync(filePath, 'utf8');
         // Special case: No writes at all.
@@ -83,6 +84,7 @@ function synthesizeInputRunEditorParseOutput(tempDirPath) {
                 // Elide the write
                 continue;
             }
+            await mkdirp(path.dirname(fileToUpdate));
             fs.writeFileSync(fileToUpdate, newContent[fileToUpdate]);
             if (!existed) {
                 console.log(clc.green(`Wrote new file ${fileToUpdate}`));
