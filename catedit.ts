@@ -46,8 +46,9 @@ for (let file of args) {
 function synthesizeInputRunEditorParseOutput(tempDirPath) {
     let contentList:string[] = args.map(fname => `@@${fname}@@\n${fileMap[fname]}@@END@@\n`);
     // Provides some hint to the files inside:
-    let cateditFileName = "catedit_" + args.join('_').replace(/[^a-zA-Z0-9@\/]/g, '@');
-    if (cateditFileName.length > 10) {
+    let cateditFileName = "catedit_" + args.join('_').replace(/[^a-zA-Z0-9@]/g, '@');
+    cateditFileName = cateditFileName.replace("/", "_");
+    if (cateditFileName.length > 100) {
         cateditFileName = cateditFileName.substring(0, 10);
     }
     let filePath = path.join(tempDirPath, cateditFileName);
@@ -55,7 +56,9 @@ function synthesizeInputRunEditorParseOutput(tempDirPath) {
     let extension = "";
     for (let arg of args) {
         let parts = arg.split('.');
-        extension = '.' + parts[parts.length - 1];
+        if (parts.length > 1) {
+            extension = '.' + parts[parts.length - 1];
+        }
         break;
     }
     filePath += extension;
