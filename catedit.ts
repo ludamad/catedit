@@ -56,7 +56,7 @@ function synthesizeInputRunEditorParseOutput(tempDirPath) {
     let extension = "";
     for (let arg of args) {
         let parts = arg.split('.');
-        if (parts.length > 1) {
+        if (parts.length > 1 && !parts[parts.length - 1].includes("/")) {
             extension = '.' + parts[parts.length - 1];
         }
         break;
